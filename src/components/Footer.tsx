@@ -1,5 +1,6 @@
-import { Shield } from 'lucide-react';
+import { Shield, MessageCircle } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
 
 export default function Footer() {
   return (
@@ -25,11 +26,21 @@ export default function Footer() {
           </div>
           <div>
             <h4 className="font-display font-semibold mb-2">Connect</h4>
-            <p className="text-sm text-muted-foreground">Built with ❤️ by the Authentix Team</p>
+            <p className="text-sm text-muted-foreground mb-3">
+              Developed by <span className="font-medium text-foreground">Sahil Topale &amp; Co.</span>
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              onClick={() => window.dispatchEvent(new CustomEvent('authentix:open-chat'))}
+            >
+              <MessageCircle className="h-4 w-4" /> Chat with Assistant
+            </Button>
           </div>
         </div>
         <div className="border-t mt-6 pt-4 text-center text-xs text-muted-foreground">
-          © {new Date().getFullYear()} Authentix. All rights reserved.
+          © {new Date().getFullYear()} Authentix · Developed by Sahil Topale &amp; Co. · All rights reserved.
         </div>
       </div>
     </footer>
