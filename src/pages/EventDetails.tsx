@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Calendar, DollarSign, MapPin, Users, ArrowLeft, Loader2 } from 'lucide-react';
+import { Calendar, DollarSign, Users, ArrowLeft, Loader2, Minus, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -10,8 +10,10 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useWallet } from '@/contexts/WalletContext';
 import { toast } from '@/hooks/use-toast';
 import { buyTicketOnChain } from '@/services/blockchainService';
-import SeatLayout from '@/components/SeatLayout';
+import SeatLayout, { buildSeats, TIER_MULTIPLIER } from '@/components/SeatLayout';
 import type { Tables } from '@/integrations/supabase/types';
+
+const MAX_TICKETS = 5;
 
 export default function EventDetails() {
   const { id } = useParams();
@@ -22,7 +24,8 @@ export default function EventDetails() {
   const [loading, setLoading] = useState(true);
   const [bookingOpen, setBookingOpen] = useState(false);
   const [booking, setBooking] = useState(false);
-  const [selectedSeat, setSelectedSeat] = useState<string | null>(null);
+  const [selectedSeats, setSelectedSeats] = useState<string[]>([]);
+  const [desiredQty, setDesiredQty] = useState(1);
   const [bookingStep, setBookingStep] = useState<'confirm' | 'blockchain' | 'done'>('confirm');
   const [bookedSeats, setBookedSeats] = useState<string[]>([]);
 
@@ -38,59 +41,85 @@ export default function EventDetails() {
 
   useEffect(() => { fetchEventAndSeats(); }, [id]);
 
+  // Tier-aware pricing
+  const seatTierMap = event ? new Map(buildSeats(event.category, event.total_seats).map((s) => [s.id, s.type])) : new Map();
+  const basePrice = event ? Number(event.price) : 0;
+  const seatPrice = (seatId: string) => {
+    const tier = seatTierMap.get(seatId) ?? 'standard';
+    return basePrice * TIER_MULTIPLIER[tier];
+  };
+  const totalPrice = selectedSeats.reduce((sum, s) => sum + seatPrice(s), 0);
+
+  const toggleSeat = (seat: string) => {
+    setSelectedSeats((prev) => {
+      if (prev.includes(seat)) return prev.filter((s) => s !== seat);
+      if (prev.length >= desiredQty) {
+        toast({ title: `Only ${desiredQty} ticket${desiredQty > 1 ? 's' : ''} selected`, description: 'Increase quantity or deselect a seat first.' });
+        return prev;
+      }
+      return [...prev, seat];
+    });
+  };
+
   const handleBook = async () => {
     if (!user) { navigate('/auth'); return; }
-    if (!selectedSeat) {
-      toast({ title: 'Select a Seat', description: 'Please choose a seat before booking.', variant: 'destructive' });
+    if (selectedSeats.length === 0) {
+      toast({ title: 'Select Seats', description: 'Please choose at least one seat before booking.', variant: 'destructive' });
+      return;
+    }
+    if (selectedSeats.length !== desiredQty) {
+      toast({ title: 'Seat count mismatch', description: `Please select exactly ${desiredQty} seat(s).`, variant: 'destructive' });
       return;
     }
     setBooking(true);
     setBookingStep('confirm');
 
     try {
-      // Step 1: If wallet connected, mint on-chain FIRST
-      let nftTokenId: number | null = null;
-      if (walletAddress && event) {
-        setBookingStep('blockchain');
-        try {
-          nftTokenId = await buyTicketOnChain(event.title);
-        } catch (chainErr: any) {
-          console.error('Blockchain mint failed:', chainErr);
-          const msg = chainErr?.message || chainErr?.reason || '';
-          const isInsufficientFunds = msg.toLowerCase().includes('insufficient') || msg.includes('funds');
-          toast({
-            title: isInsufficientFunds ? 'Insufficient Gas Fees or Funds' : 'Blockchain Transaction Failed',
-            description: isInsufficientFunds
-              ? 'You do not have enough ETH in your wallet to pay for network fees. Please add funds and try again.'
-              : (chainErr?.reason || chainErr?.message || 'Transaction was rejected or failed.'),
-            variant: 'destructive',
-          });
-          setBooking(false);
-          setBookingStep('confirm');
-          return; // Do NOT book in database
+      const mintedTokens: number[] = [];
+      // Book each seat sequentially. On-chain mint per ticket if wallet connected.
+      for (const seat of selectedSeats) {
+        let nftTokenId: number | null = null;
+        if (walletAddress && event) {
+          setBookingStep('blockchain');
+          try {
+            nftTokenId = await buyTicketOnChain(event.title);
+          } catch (chainErr: any) {
+            console.error('Blockchain mint failed:', chainErr);
+            const msg = chainErr?.message || chainErr?.reason || '';
+            const isInsufficientFunds = msg.toLowerCase().includes('insufficient') || msg.includes('funds');
+            toast({
+              title: isInsufficientFunds ? 'Insufficient Gas Fees or Funds' : 'Blockchain Transaction Failed',
+              description: isInsufficientFunds
+                ? 'You do not have enough ETH in your wallet to pay for network fees.'
+                : (chainErr?.reason || chainErr?.message || 'Transaction was rejected or failed.'),
+              variant: 'destructive',
+            });
+            setBooking(false);
+            setBookingStep('confirm');
+            return;
+          }
         }
-      }
 
-      // Step 2: Book in database (only reached if chain mint succeeded or no wallet)
-      setBookingStep('confirm');
-      const { data, error } = await supabase.functions.invoke('book-ticket', {
-        body: {
-          eventId: id!,
-          seatNumber: selectedSeat,
-          walletAddress: walletAddress || null,
-          nftTokenId: nftTokenId ? String(nftTokenId) : null,
-        },
-      });
-      if (error) throw error;
-
-      if (data?.ticketRowId && nftTokenId) {
-        toast({ title: 'On-Chain Ticket Minted! ⛓️', description: `NFT Token #${nftTokenId} created on Sepolia.` });
+        setBookingStep('confirm');
+        const { data, error } = await supabase.functions.invoke('book-ticket', {
+          body: {
+            eventId: id!,
+            seatNumber: seat,
+            walletAddress: walletAddress || null,
+            nftTokenId: nftTokenId ? String(nftTokenId) : null,
+          },
+        });
+        if (error) throw error;
+        if (nftTokenId) mintedTokens.push(nftTokenId);
       }
 
       setBookingStep('done');
-      toast({ title: 'Ticket Booked! 🎉', description: `Seat ${selectedSeat} confirmed.${nftTokenId ? ` NFT #${nftTokenId}` : ''} Check My Tickets for your QR code.` });
+      toast({
+        title: `${selectedSeats.length} Ticket${selectedSeats.length > 1 ? 's' : ''} Booked! 🎉`,
+        description: `Seats: ${selectedSeats.join(', ')}.${mintedTokens.length ? ` NFTs: #${mintedTokens.join(', #')}` : ''} Check My Tickets.`,
+      });
       setBookingOpen(false);
-      setSelectedSeat(null);
+      setSelectedSeats([]);
       await fetchEventAndSeats();
     } catch (err: any) {
       toast({ title: 'Booking Failed', description: err.message, variant: 'destructive' });
@@ -102,6 +131,8 @@ export default function EventDetails() {
 
   if (loading) return <div className="container mx-auto px-4 py-16 text-center text-muted-foreground">Loading...</div>;
   if (!event) return <div className="container mx-auto px-4 py-16 text-center">Event not found</div>;
+
+  const maxAllowed = Math.min(MAX_TICKETS, event.available_seats);
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-5xl animate-fade-in">
@@ -130,7 +161,8 @@ export default function EventDetails() {
             </div>
             <div className="flex items-center gap-3 text-sm">
               <DollarSign className="h-4 w-4 text-primary" />
-              <span className="font-semibold text-lg">${Number(event.price).toFixed(2)}</span>
+              <span className="font-semibold text-lg">${basePrice.toFixed(2)}</span>
+              <span className="text-xs text-muted-foreground">(Premium +30%, VIP +50%)</span>
             </div>
             <div className="flex items-center gap-3 text-sm">
               <Users className="h-4 w-4 text-primary" />
@@ -157,6 +189,39 @@ export default function EventDetails() {
             </CardContent>
           </Card>
 
+          {/* Quantity stepper */}
+          <div className="flex items-center justify-between rounded-lg border p-3 mb-3">
+            <div>
+              <p className="text-sm font-medium">Number of tickets</p>
+              <p className="text-xs text-muted-foreground">Max {MAX_TICKETS} per booking</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => {
+                  const next = Math.max(1, desiredQty - 1);
+                  setDesiredQty(next);
+                  if (selectedSeats.length > next) setSelectedSeats(selectedSeats.slice(0, next));
+                }}
+                disabled={desiredQty <= 1}
+              >
+                <Minus className="h-3.5 w-3.5" />
+              </Button>
+              <span className="w-8 text-center font-semibold">{desiredQty}</span>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => setDesiredQty(Math.min(maxAllowed, desiredQty + 1))}
+                disabled={desiredQty >= maxAllowed}
+              >
+                <Plus className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </div>
+
           {!walletAddress && (
             <Button variant="outline" className="w-full mb-3 gap-2" onClick={connectWallet}>
               🦊 Connect Wallet for On-Chain Ticket
@@ -166,32 +231,45 @@ export default function EventDetails() {
           <Button
             size="lg"
             className="w-full"
-            disabled={event.available_seats <= 0}
+            disabled={event.available_seats <= 0 || selectedSeats.length === 0}
             onClick={() => setBookingOpen(true)}
           >
-            {event.available_seats > 0 ? 'Book Ticket' : 'Sold Out'}
+            {event.available_seats <= 0
+              ? 'Sold Out'
+              : selectedSeats.length === 0
+              ? `Select ${desiredQty} Seat${desiredQty > 1 ? 's' : ''}`
+              : `Book ${selectedSeats.length} Ticket${selectedSeats.length > 1 ? 's' : ''} — $${totalPrice.toFixed(2)}`}
           </Button>
         </div>
       </div>
 
       {/* Seat Selection Section */}
       <div className="mt-10">
-        <h2 className="font-display text-2xl font-bold mb-4">Select Your Seat</h2>
+        <h2 className="font-display text-2xl font-bold mb-1">Select Your Seat{desiredQty > 1 ? 's' : ''}</h2>
+        <p className="text-sm text-muted-foreground mb-4">
+          Pick {desiredQty} seat{desiredQty > 1 ? 's' : ''} — selected {selectedSeats.length}/{desiredQty}
+        </p>
         <Card>
           <CardContent className="p-6">
             <SeatLayout
               category={event.category}
               totalSeats={event.total_seats}
               availableSeats={event.available_seats}
-              onSelect={setSelectedSeat}
-              selectedSeat={selectedSeat}
+              onSelect={toggleSeat}
+              selectedSeat={null}
+              selectedSeats={selectedSeats}
               bookedSeats={bookedSeats}
+              basePrice={basePrice}
             />
           </CardContent>
         </Card>
-        {selectedSeat && (
-          <div className="mt-4 text-center animate-fade-in">
-            <Badge className="text-sm px-4 py-2">Selected: Seat {selectedSeat}</Badge>
+        {selectedSeats.length > 0 && (
+          <div className="mt-4 flex flex-wrap justify-center gap-2 animate-fade-in">
+            {selectedSeats.map((s) => (
+              <Badge key={s} className="text-sm px-3 py-1.5 cursor-pointer" onClick={() => toggleSeat(s)}>
+                {s} — ${seatPrice(s).toFixed(2)} ✕
+              </Badge>
+            ))}
           </div>
         )}
       </div>
@@ -201,21 +279,30 @@ export default function EventDetails() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Confirm Booking</DialogTitle>
-            <DialogDescription>You are about to book a ticket for {event.title}</DialogDescription>
+            <DialogDescription>You are about to book {selectedSeats.length} ticket(s) for {event.title}</DialogDescription>
           </DialogHeader>
           <div className="space-y-2 py-4">
             <p className="text-sm"><strong>Event:</strong> {event.title}</p>
             <p className="text-sm"><strong>Date:</strong> {new Date(event.date).toLocaleDateString()}</p>
-            <p className="text-sm"><strong>Price:</strong> ${Number(event.price).toFixed(2)}</p>
-            {selectedSeat && <p className="text-sm"><strong>Seat:</strong> {selectedSeat}</p>}
+            <div className="text-sm">
+              <strong>Seats:</strong>
+              <ul className="ml-4 mt-1 space-y-0.5">
+                {selectedSeats.map((s) => (
+                  <li key={s} className="text-xs">
+                    {s} ({seatTierMap.get(s)?.toUpperCase() ?? 'STANDARD'}) — ${seatPrice(s).toFixed(2)}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <p className="text-sm font-semibold pt-2 border-t"><strong>Total:</strong> ${totalPrice.toFixed(2)}</p>
             {walletAddress && (
               <>
                 <p className="text-sm"><strong>Wallet:</strong> {walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}</p>
-                <p className="text-xs text-primary">⛓️ This ticket will also be minted on-chain (Sepolia)</p>
+                <p className="text-xs text-primary">⛓️ Each ticket will be minted on-chain (Sepolia)</p>
               </>
             )}
             {!walletAddress && (
-              <p className="text-xs text-muted-foreground">💡 Connect your wallet to also mint an on-chain NFT ticket</p>
+              <p className="text-xs text-muted-foreground">💡 Connect your wallet to also mint on-chain NFT tickets</p>
             )}
           </div>
           {booking && bookingStep === 'blockchain' && (
