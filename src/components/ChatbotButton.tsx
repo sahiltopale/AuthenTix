@@ -109,6 +109,16 @@ export default function ChatbotButton() {
     if (!open) setUnread(0);
   };
 
+  // Listen for global "open chatbot" events from navbar/footer triggers
+  useEffect(() => {
+    const handler = () => {
+      setOpen(true);
+      setUnread(0);
+    };
+    window.addEventListener('authentix:open-chat', handler);
+    return () => window.removeEventListener('authentix:open-chat', handler);
+  }, []);
+
   const chatWidth = expanded ? 'w-[560px]' : 'w-[380px] sm:w-[400px]';
   const chatHeight = expanded ? 'max-h-[80vh]' : 'max-h-[520px]';
 

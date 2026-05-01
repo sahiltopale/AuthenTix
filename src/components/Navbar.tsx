@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Menu, X, Wallet, LogOut, Shield, Unplug, Loader2 } from 'lucide-react';
+import { Menu, X, Wallet, LogOut, Shield, Unplug, Loader2, MessageCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import ThemeToggle from '@/components/ThemeToggle';
@@ -126,6 +126,15 @@ export default function Navbar() {
 
           <div className="hidden md:flex items-center gap-2">
             <ThemeToggle />
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-2"
+              onClick={() => window.dispatchEvent(new CustomEvent('authentix:open-chat'))}
+              title="Open Authentix Assistant"
+            >
+              <MessageCircle className="h-4 w-4" /> Chat
+            </Button>
             <WalletButton />
             {user ? (
               <Button variant="ghost" size="sm" onClick={signOut} className="gap-2">
@@ -173,6 +182,14 @@ export default function Navbar() {
                   <span className="text-sm text-muted-foreground">Theme</span>
                   <ThemeToggle />
                 </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="gap-2 justify-start"
+                  onClick={() => { window.dispatchEvent(new CustomEvent('authentix:open-chat')); setMobileOpen(false); }}
+                >
+                  <MessageCircle className="h-4 w-4" /> Chat with Assistant
+                </Button>
                 <div className="px-3">
                   <WalletButton />
                 </div>
@@ -189,6 +206,13 @@ export default function Navbar() {
             </div>
           </div>
         )}
+
+        {/* Developer credit */}
+        <div className="hidden md:block border-t border-border/40">
+          <p className="text-center text-[11px] py-1 text-muted-foreground">
+            Developed by <span className="font-medium text-foreground">Sahil Topale &amp; Co.</span>
+          </p>
+        </div>
       </div>
     </nav>
   );
