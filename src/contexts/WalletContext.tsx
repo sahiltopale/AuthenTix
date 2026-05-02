@@ -49,6 +49,10 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
   const [chainName, setChainName] = useState<string | null>(null);
+  const [manuallyDisconnected, setManuallyDisconnected] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem('authentix:wallet-disconnected') === '1';
+  });
   const { updateWalletAddress, user, profile } = useAuth();
 
   const ensureSepoliaNetwork = useCallback(async () => {
@@ -82,6 +86,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   // Restore wallet on load if profile has one
   useEffect(() => {
+    if (manuallyDisconnected) return;
     if (profile?.wallet_address && !walletAddress && window.ethereum) {
       window.ethereum.request({ method: 'eth_accounts' }).then((accounts: string[]) => {
         if (accounts[0]?.toLowerCase() === profile.wallet_address?.toLowerCase()) {
@@ -92,13 +97,14 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         }
       }).catch(() => {});
     }
-  }, [profile, walletAddress]);
+  }, [profile, walletAddress, manuallyDisconnected]);
 
   useEffect(() => {
+    if (manuallyDisconnected) return;
     if (user && walletAddress && profile?.wallet_address?.toLowerCase() !== walletAddress.toLowerCase()) {
       updateWalletAddress(walletAddress).catch(() => {});
     }
-  }, [user, walletAddress, profile?.wallet_address, updateWalletAddress]);
+  }, [user, walletAddress, profile?.wallet_address, updateWalletAddress, manuallyDisconnected]);
 
   // Listen for account/chain changes
   useEffect(() => {
@@ -108,6 +114,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         setWalletAddress(null);
         setChainName(null);
       } else {
+        if (manuallyDisconnected) return;
         setWalletAddress(accounts[0]);
         if (user) updateWalletAddress(accounts[0]);
       }
@@ -121,7 +128,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       window.ethereum?.removeListener('accountsChanged', handleAccountsChanged);
       window.ethereum?.removeListener('chainChanged', handleChainChanged);
     };
-  }, [user, updateWalletAddress]);
+  }, [user, updateWalletAddress, manuallyDisconnected]);
 
   const connectWallet = useCallback(async () => {
     if (!window.ethereum) {
@@ -138,6 +145,10 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
       const address = accounts[0];
       const chainId = await ensureSepoliaNetwork();
+
+      // Clear manual-disconnect flag since user is reconnecting intentionally
+      setManuallyDisconnected(false);
+      if (typeof window !== 'undefined') localStorage.removeItem('authentix:wallet-disconnected');
 
       setWalletAddress(address);
       setChainName(CHAIN_NAMES[chainId] || `Chain ${parseInt(chainId, 16)}`);
@@ -160,10 +171,14 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, [ensureSepoliaNetwork, user, updateWalletAddress]);
 
   const disconnectWallet = useCallback(() => {
+    setManuallyDisconnected(true);
+    if (typeof window !== 'undefined') localStorage.setItem('authentix:wallet-disconnected', '1');
     setWalletAddress(null);
     setChainName(null);
+    // Clear stored wallet on profile so it isn't auto-restored
+    if (user) updateWalletAddress('').catch(() => {});
     toast({ title: 'Wallet Disconnected', description: 'Your wallet has been disconnected.' });
-  }, []);
+  }, [user, updateWalletAddress]);
 
   return (
     <WalletContext.Provider value={{ walletAddress, isConnecting, chainName, connectWallet, disconnectWallet }}>

@@ -206,13 +206,6 @@ export default function Navbar() {
             </div>
           </div>
         )}
-
-        {/* Developer credit */}
-        <div className="hidden md:block border-t border-border/40">
-          <p className="text-center text-[11px] py-1 text-muted-foreground">
-            Developed by <span className="font-medium text-foreground">Sahil Topale &amp; Co.</span>
-          </p>
-        </div>
       </div>
     </nav>
   );
