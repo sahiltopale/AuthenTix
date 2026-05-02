@@ -50,6 +50,21 @@ export default function EventDetails() {
   };
   const totalPrice = selectedSeats.reduce((sum, s) => sum + seatPrice(s), 0);
 
+  // Dynamic pricing breakdown by tier
+  const tierBreakdown = selectedSeats.reduce(
+    (acc, s) => {
+      const tier = (seatTierMap.get(s) ?? 'standard') as keyof typeof TIER_MULTIPLIER;
+      acc[tier].count += 1;
+      acc[tier].subtotal += basePrice * TIER_MULTIPLIER[tier];
+      return acc;
+    },
+    {
+      vip: { count: 0, subtotal: 0, unit: basePrice * TIER_MULTIPLIER.vip },
+      premium: { count: 0, subtotal: 0, unit: basePrice * TIER_MULTIPLIER.premium },
+      standard: { count: 0, subtotal: 0, unit: basePrice * TIER_MULTIPLIER.standard },
+    },
+  );
+
   const toggleSeat = (seat: string) => {
     setSelectedSeats((prev) => {
       if (prev.includes(seat)) return prev.filter((s) => s !== seat);
@@ -272,6 +287,39 @@ export default function EventDetails() {
             ))}
           </div>
         )}
+
+        {/* Dynamic Pricing Breakdown */}
+        <Card className="mt-6 border-primary/20">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-semibold text-sm">Dynamic Pricing</h3>
+              <span className="text-xs text-muted-foreground">Base ${basePrice.toFixed(2)}</span>
+            </div>
+            <div className="space-y-2 text-sm">
+              {(['vip', 'premium', 'standard'] as const).map((tier) => {
+                const row = tierBreakdown[tier];
+                const label = tier === 'vip' ? 'VIP (+50%)' : tier === 'premium' ? 'Premium (+30%)' : 'Standard';
+                const dot = tier === 'vip' ? 'bg-amber-400' : tier === 'premium' ? 'bg-purple-400' : 'bg-muted-foreground/40';
+                return (
+                  <div key={tier} className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className={`h-2.5 w-2.5 rounded-full ${dot}`} />
+                      <span>{label}</span>
+                      <span className="text-xs text-muted-foreground">@ ${row.unit.toFixed(2)}</span>
+                    </div>
+                    <span className="font-mono">
+                      {row.count} × ${row.unit.toFixed(2)} = <strong>${row.subtotal.toFixed(2)}</strong>
+                    </span>
+                  </div>
+                );
+              })}
+              <div className="flex items-center justify-between pt-2 border-t mt-2">
+                <span className="font-semibold">Total</span>
+                <span className="font-bold text-primary text-lg">${totalPrice.toFixed(2)}</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Booking Modal */}
