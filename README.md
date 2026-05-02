@@ -192,4 +192,11 @@ supabase/
 
 Built with ❤️ by **Sahil Topale & Co.**
 
+### 👥 Team
+
+1. **Sahil Topale** — Full Stack Developer
+2. **Sebin Sebastian** — Frontend Developer
+3. **Rushil Raul** — Backend Developer
+4. **Darsh Shetty** — Blockchain Developer
+
 Open-source dependencies: React, Vite, Tailwind CSS, shadcn/ui, Supabase, ethers.js, react-markdown.

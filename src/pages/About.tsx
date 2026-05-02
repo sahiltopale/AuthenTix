@@ -2,10 +2,10 @@ import { Shield, Code, Palette, Database, Link as LinkIcon } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card';
 
 const team = [
-  { name: 'Alex Chen', role: 'Full Stack Developer', desc: 'Architecting the platform from frontend to backend with scalable solutions.', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Alex' },
-  { name: 'Sarah Johnson', role: 'Frontend Developer', desc: 'Crafting beautiful, responsive user interfaces with modern React patterns.', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah' },
-  { name: 'Michael Park', role: 'Backend Developer', desc: 'Building robust APIs and database systems for reliable ticket management.', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Michael' },
-  { name: 'Emma Williams', role: 'Blockchain Developer', desc: 'Integrating Web3 technologies and smart contracts for NFT ticketing.', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Emma' },
+  { name: 'Sahil Topale', role: 'Full Stack Developer', desc: 'Architecting the platform from frontend to backend with scalable solutions.', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Sahil' },
+  { name: 'Sebin Sebastian', role: 'Frontend Developer', desc: 'Crafting beautiful, responsive user interfaces with modern React patterns.', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Sebin' },
+  { name: 'Rushil Raul', role: 'Backend Developer', desc: 'Building robust APIs and database systems for reliable ticket management.', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Rushil' },
+  { name: 'Darsh Shetty', role: 'Blockchain Developer', desc: 'Integrating Web3 technologies and smart contracts for NFT ticketing.', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Darsh' },
 ];
 
 export default function About() {
