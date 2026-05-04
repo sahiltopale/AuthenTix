@@ -125,7 +125,6 @@ export default function Navbar() {
           </div>
 
           <div className="hidden md:flex items-center gap-2">
-            <ThemeToggle />
             <Button
               variant="ghost"
               size="sm"
@@ -145,6 +144,7 @@ export default function Navbar() {
                 <Button size="sm">Login / Register</Button>
               </Link>
             )}
+            <ThemeToggle />
           </div>
 
           {/* Mobile toggle */}
